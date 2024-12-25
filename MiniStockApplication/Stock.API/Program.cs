@@ -1,0 +1,55 @@
+using MassTransit;
+
+using Shared;
+
+using Stock.API.Consumers;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddMassTransit(configurator =>
+{
+    configurator.AddConsumer<OrderCreatedEventConsumer>();
+    configurator.AddConsumer<PaymentFailedEventConsumer>();
+    configurator.UsingRabbitMq((context, _configurator) =>
+    {
+        _configurator.Host(builder.Configuration["RabbitMQ:Url"], rabbitmqHostConfigurator =>
+        {
+            rabbitmqHostConfigurator.Username(builder.Configuration["RabbitMQ:UserName"]!);
+            rabbitmqHostConfigurator.Password(builder.Configuration["RabbitMQ:Password"]!);
+        });
+
+        _configurator.ReceiveEndpoint(RabbitMQSettingsConst.StockOrderCreatedEventQueueName, e =>
+        {
+            e.ConfigureConsumer<OrderCreatedEventConsumer>(context);
+        });
+
+        _configurator.ReceiveEndpoint(RabbitMQSettingsConst.OrderPaymentFailedEventQueueName, e =>
+        {
+            e.ConfigureConsumer<PaymentFailedEventConsumer>(context);
+        });
+    });
+});
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
